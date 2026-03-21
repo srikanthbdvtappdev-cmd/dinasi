@@ -192,7 +192,7 @@ class _PredefinedItemsSheetState extends State<PredefinedItemsSheet> {
                     const Text(
                       'ಪಟ್ಟಿಯಲ್ಲಿ ಸೇರಿಸಿ',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF1A1A1A),
                       ),
@@ -354,7 +354,7 @@ class _ItemRow extends StatelessWidget {
               child: Text(
                 data['kannada']!,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: isInCart
                       ? const Color(0xFF2D6A4F)
@@ -408,7 +408,7 @@ class _ItemRow extends StatelessWidget {
         ),
         subtitle: Text(
           data['english']!,
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -441,10 +441,7 @@ class _ItemRow extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -452,9 +449,9 @@ class _ItemRow extends StatelessWidget {
                   if (isInCart)
                     const Icon(Icons.add, size: 14)
                   else
-                    const Text('+ ಸೇರಿಸಿ', style: TextStyle(fontSize: 13)),
+                    const Text('+ ಸೇರಿಸಿ', style: TextStyle(fontSize: 11)),
                   if (isInCart)
-                    const Text(' ಮತ್ತೊಂದು', style: TextStyle(fontSize: 12)),
+                    const Text(' ಮತ್ತೊಂದು', style: TextStyle(fontSize: 11)),
                 ],
               ),
             ),

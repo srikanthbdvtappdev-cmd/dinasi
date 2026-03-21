@@ -18,6 +18,7 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5EE),
       body: SafeArea(
+        bottom: false, // _VoiceFooter handles the bottom inset directly
         child: Column(
           children: [
             // App Header
@@ -38,44 +39,32 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<GroceryListProvider>(
       builder: (context, provider, _) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 16, 8),
+        return Container(
+          color: const Color(0xFF2D6A4F),
+          padding: const EdgeInsets.fromLTRB(20, 14, 8, 6),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Title area
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'ದಿನಸಿ',
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF1A1A1A),
-                        height: 1.1,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Text(
-                          'Dinasi · ${provider.listTitle}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                child: Text(
+                  'ದಿನಸಿ',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFFFF8A80),
+                    height: 1.1,
+                  ),
                 ),
               ),
               // Action buttons
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   // Predefined items button
-                  OutlinedButton.icon(
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
                     onPressed: () {
                       showModalBottomSheet(
                         context: context,
@@ -100,65 +89,51 @@ class _Header extends StatelessWidget {
                     },
                     icon: const Icon(
                       Icons.format_list_bulleted,
-                      size: 16,
-                      color: Color(0xFF2D6A4F),
+                      size: 22,
+                      color: Colors.white,
                     ),
-                    label: const Text(
-                      'ಪಟ್ಟಿ',
-                      style: TextStyle(
-                        color: Color(0xFF2D6A4F),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(
-                        color: Color(0xFF2D6A4F),
-                        width: 1.5,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      backgroundColor: Colors.white,
-                    ),
+                    tooltip: 'ಪಟ್ಟಿ',
                   ),
-                  const SizedBox(width: 8),
                   // Export button
                   IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
                     onPressed: () => _showExportSheet(context, provider),
                     icon: const Icon(
                       Icons.share_outlined,
-                      color: Color(0xFF2D6A4F),
+                      color: Colors.white,
                       size: 22,
                     ),
                     tooltip: 'ರಫ್ತು ಮಾಡಿ',
                   ),
                   // Save current list
                   IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
                     onPressed: () => _showSaveListDialog(context, provider),
                     icon: const Icon(
                       Icons.bookmark_add_outlined,
-                      color: Color(0xFF2D6A4F),
+                      color: Colors.white,
                       size: 22,
                     ),
                     tooltip: 'ಪಟ್ಟಿ ಉಳಿಸಿ',
                   ),
                   // Browse saved lists
                   IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
                     onPressed: () => _showSavedListsSheet(context),
                     icon: const Icon(
                       Icons.bookmarks_outlined,
-                      color: Color(0xFF2D6A4F),
+                      color: Colors.white,
                       size: 22,
                     ),
                     tooltip: 'ಉಳಿಸಿದ ಪಟ್ಟಿಗಳು',
                   ),
                   // Clear all button
                   IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
                     onPressed: () {
                       if (provider.itemCount == 0) return;
                       showDialog(
@@ -189,7 +164,7 @@ class _Header extends StatelessWidget {
                     },
                     icon: const Icon(
                       Icons.delete_outline,
-                      color: Colors.redAccent,
+                      color: Color(0xFFFF8A80),
                       size: 22,
                     ),
                   ),
@@ -432,8 +407,11 @@ class _GroceryBody extends StatelessWidget {
 class _VoiceFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    // Add bottom padding equal to the navigation bar inset (gesture nav / button nav)
+    // so the mic button is never obscured behind the system navigation bar.
+    final bottomInset = MediaQuery.of(context).padding.bottom;
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + bottomInset),
       decoration: BoxDecoration(
         color: const Color(0xFFF5F5EE),
         border: Border(top: BorderSide(color: Colors.grey.shade200, width: 1)),
@@ -544,68 +522,72 @@ void _showExportSheet(BuildContext context, GroceryListProvider provider) {
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
-    builder: (_) => Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (sheetContext) {
+      return Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 18),
-          const Text(
-            'ರಫ್ತು ಮಾಡಿ',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '${provider.itemCount} ವಸ್ತುಗಳ ಪಟ್ಟಿ',
-            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 20),
-          _ExportOptionTile(
-            icon: Icons.picture_as_pdf_outlined,
-            title: 'PDF ಆಗಿ',
-            subtitle: 'ಪಟ್ಟಿಯನ್ನು PDF ರೂಪದಲ್ಲಿ ಶೇರ್ ಮಾಡಿ',
-            color: Colors.redAccent,
-            onTap: () {
-              Navigator.pop(context);
-              ExportService.exportAsPdf(
-                context,
-                List.from(provider.items),
-                provider.listTitle,
-              ).catchError((_) {});
-            },
-          ),
-          const SizedBox(height: 12),
-          _ExportOptionTile(
-            icon: Icons.image_outlined,
-            title: 'ಚಿತ್ರವಾಗಿ',
-            subtitle: 'ಪಿಕ್ಚರ್ (PNG) ರೂಪದಲ್ಲಿ ಶೇರ್ ಮಾಡಿ',
-            color: const Color(0xFF2D6A4F),
-            onTap: () {
-              Navigator.pop(context);
-              ExportService.exportAsImage(
-                context,
-                List.from(provider.items),
-                provider.listTitle,
-              ).catchError((_) {});
-            },
-          ),
-        ],
-      ),
-    ),
+            const SizedBox(height: 18),
+            const Text(
+              'ರಫ್ತು ಮಾಡಿ',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${provider.itemCount} ವಸ್ತುಗಳ ಪಟ್ಟಿ',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 20),
+            _ExportOptionTile(
+              icon: Icons.picture_as_pdf_outlined,
+              title: 'PDF ಆಗಿ',
+              subtitle: 'ಪಟ್ಟಿಯನ್ನು PDF ರೂಪದಲ್ಲಿ ಶೇರ್ ಮಾಡಿ',
+              color: Colors.redAccent,
+              onTap: () {
+                Navigator.pop(context);
+                ExportService.exportAsPdf(
+                  context,
+                  List.from(provider.items),
+                  provider.listTitle,
+                ).catchError((_) {});
+              },
+            ),
+            const SizedBox(height: 12),
+            _ExportOptionTile(
+              icon: Icons.image_outlined,
+              title: 'ಚಿತ್ರವಾಗಿ',
+              subtitle: 'ಪಿಕ್ಚರ್ (PNG) ರೂಪದಲ್ಲಿ ಶೇರ್ ಮಾಡಿ',
+              color: const Color(0xFF2D6A4F),
+              onTap: () {
+                Navigator.pop(context);
+                ExportService.exportAsImage(
+                  context,
+                  List.from(provider.items),
+                  provider.listTitle,
+                ).catchError((_) {});
+              },
+            ),
+          ],
+        ),
+      );
+    },
   );
 }
 
