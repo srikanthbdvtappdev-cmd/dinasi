@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/grocery_provider.dart';
+import '../providers/language_provider.dart';
+import '../providers/app_strings.dart';
 import '../providers/predefined_items_provider.dart';
 import '../providers/saved_lists_provider.dart';
 import '../widgets/grocery_list_tile.dart';
@@ -9,24 +11,61 @@ import '../widgets/predefined_items_sheet.dart';
 import '../widgets/saved_lists_sheet.dart';
 import '../models/grocery_item.dart';
 import '../services/export_service.dart';
+import 'notepad_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tab;
+  final _notepadCtrl = NotepadController();
+
+  @override
+  void initState() {
+    super.initState();
+    _tab = TabController(length: 2, vsync: this);
+    _tab.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _tab.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5EE),
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
-        bottom: false, // _VoiceFooter handles the bottom inset directly
+        bottom: false,
         child: Column(
           children: [
-            // App Header
-            _Header(),
-            // Grocery List
-            Expanded(child: _GroceryBody()),
-            // Voice Input Footer
-            _VoiceFooter(),
+            _Header(
+              tabController: _tab,
+              currentTab: _tab.index,
+              notepadCtrl: _notepadCtrl,
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tab,
+                children: [
+                  Column(
+                    children: [
+                      Expanded(child: _GroceryBody()),
+                      _VoiceFooter(),
+                    ],
+                  ),
+                  NotepadTabContent(controller: _notepadCtrl),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -35,139 +74,238 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
+  final TabController tabController;
+  final int currentTab;
+  final NotepadController? notepadCtrl;
+
+  const _Header({
+    required this.tabController,
+    required this.currentTab,
+    this.notepadCtrl,
+  });
+
   @override
   Widget build(BuildContext context) {
-    return Consumer<GroceryListProvider>(
-      builder: (context, provider, _) {
+    return Consumer2<GroceryListProvider, LanguageProvider>(
+      builder: (context, provider, langProvider, _) {
+        final s = AppStrings.of(langProvider);
         return Container(
           color: const Color(0xFF2D6A4F),
-          padding: const EdgeInsets.fromLTRB(20, 14, 8, 6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Title area
-              Expanded(
-                child: Text(
-                  'ದಿನಸಿ',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFFFF8A80),
-                    height: 1.1,
-                  ),
+              // Top row: title + action buttons
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 8, 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Title
+                    Expanded(
+                      child: Text(
+                        s.appTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFFF8A80),
+                          height: 1.1,
+                        ),
+                      ),
+                    ),
+                    // Language toggle — always visible
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      onPressed: () {
+                        context
+                            .read<GroceryListProvider>()
+                            .clearForLanguageSwitch();
+                        langProvider.toggle();
+                      },
+                      icon: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.white54, width: 1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          langProvider.isKannada ? 'ಕನ' : 'EN',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      tooltip: s.tooltipLanguage,
+                    ),
+                    // Notepad actions — visible only on the notepad tab
+                    if (currentTab == 1) ...[
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        onPressed: () => notepadCtrl?.showSavedNotes?.call(),
+                        icon: const Icon(
+                          Icons.notes,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        tooltip: s.notepadSavedNotesTooltip,
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        onPressed: () => notepadCtrl?.save?.call(),
+                        icon: const Icon(
+                          Icons.save_outlined,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        tooltip: s.notepadSaveTooltip,
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        onPressed: () => notepadCtrl?.delete?.call(),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Color(0xFFFF8A80),
+                          size: 22,
+                        ),
+                        tooltip: s.notepadClearTooltip,
+                      ),
+                    ],
+                    // Grocery actions — visible only on the grocery tab
+                    if (currentTab == 0) ...[
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => MultiProvider(
+                              providers: [
+                                ChangeNotifierProvider.value(value: provider),
+                                ChangeNotifierProvider.value(
+                                  value: context
+                                      .read<PredefinedItemsProvider>(),
+                                ),
+                                ChangeNotifierProvider.value(
+                                  value: langProvider,
+                                ),
+                              ],
+                              child: DraggableScrollableSheet(
+                                initialChildSize: 0.75,
+                                minChildSize: 0.4,
+                                maxChildSize: 0.95,
+                                builder: (_, scrollController) =>
+                                    const PredefinedItemsSheet(),
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(
+                          Icons.format_list_bulleted,
+                          size: 22,
+                          color: Colors.white,
+                        ),
+                        tooltip: s.tooltipPredefinedList,
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        onPressed: () => _showExportSheet(context, provider, s),
+                        icon: const Icon(
+                          Icons.share_outlined,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        tooltip: s.tooltipExport,
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        onPressed: () =>
+                            _showSaveListDialog(context, provider, s),
+                        icon: const Icon(
+                          Icons.bookmark_add_outlined,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        tooltip: s.tooltipSaveList,
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        onPressed: () => _showSavedListsSheet(context),
+                        icon: const Icon(
+                          Icons.bookmarks_outlined,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        tooltip: s.tooltipSavedLists,
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        onPressed: () {
+                          if (provider.itemCount == 0) return;
+                          showDialog(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: Text(s.clearAllTitle),
+                              content: Text(s.clearAllBody),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: Text(s.btnCancel),
+                                ),
+                                FilledButton(
+                                  onPressed: () {
+                                    provider.clearAll();
+                                    Navigator.pop(context);
+                                  },
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                  child: Text(s.btnDelete),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Color(0xFFFF8A80),
+                          size: 22,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              // Action buttons
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Predefined items button
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    onPressed: () {
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => MultiProvider(
-                          providers: [
-                            ChangeNotifierProvider.value(value: provider),
-                            ChangeNotifierProvider.value(
-                              value: context.read<PredefinedItemsProvider>(),
-                            ),
-                          ],
-                          child: DraggableScrollableSheet(
-                            initialChildSize: 0.75,
-                            minChildSize: 0.4,
-                            maxChildSize: 0.95,
-                            builder: (_, scrollController) =>
-                                const PredefinedItemsSheet(),
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(
-                      Icons.format_list_bulleted,
-                      size: 22,
-                      color: Colors.white,
-                    ),
-                    tooltip: 'ಪಟ್ಟಿ',
-                  ),
-                  // Export button
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    onPressed: () => _showExportSheet(context, provider),
-                    icon: const Icon(
-                      Icons.share_outlined,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                    tooltip: 'ರಫ್ತು ಮಾಡಿ',
-                  ),
-                  // Save current list
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    onPressed: () => _showSaveListDialog(context, provider),
-                    icon: const Icon(
-                      Icons.bookmark_add_outlined,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                    tooltip: 'ಪಟ್ಟಿ ಉಳಿಸಿ',
-                  ),
-                  // Browse saved lists
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    onPressed: () => _showSavedListsSheet(context),
-                    icon: const Icon(
-                      Icons.bookmarks_outlined,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                    tooltip: 'ಉಳಿಸಿದ ಪಟ್ಟಿಗಳು',
-                  ),
-                  // Clear all button
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    onPressed: () {
-                      if (provider.itemCount == 0) return;
-                      showDialog(
-                        context: context,
-                        builder: (_) => AlertDialog(
-                          title: const Text('ಎಲ್ಲ ಅಳಿಸಿ?'),
-                          content: const Text(
-                            'ಪಟ್ಟಿಯಲ್ಲಿರುವ ಎಲ್ಲ ವಸ್ತುಗಳನ್ನು ತೆಗೆಯಬೇಕೇ?',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('ಬೇಡ'),
-                            ),
-                            FilledButton(
-                              onPressed: () {
-                                provider.clearAll();
-                                Navigator.pop(context);
-                              },
-                              style: FilledButton.styleFrom(
-                                backgroundColor: Colors.redAccent,
-                              ),
-                              child: const Text('ಅಳಿಸಿ'),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                    icon: const Icon(
-                      Icons.delete_outline,
-                      color: Color(0xFFFF8A80),
-                      size: 22,
-                    ),
-                  ),
+              // Tab bar
+              TabBar(
+                controller: tabController,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white54,
+                indicatorColor: const Color(0xFFFF8A80),
+                indicatorWeight: 3,
+                labelStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+                unselectedLabelStyle: const TextStyle(fontSize: 13),
+                tabs: [
+                  Tab(text: s.tabGroceries),
+                  Tab(text: s.tabNotepad),
                 ],
               ),
             ],
@@ -181,9 +319,10 @@ class _Header extends StatelessWidget {
 class _GroceryBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Consumer<GroceryListProvider>(
-      builder: (context, provider, _) {
+    return Consumer2<GroceryListProvider, LanguageProvider>(
+      builder: (context, provider, langProvider, _) {
         final items = provider.items;
+        final s = AppStrings.of(langProvider);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -210,7 +349,7 @@ class _GroceryBody extends StatelessWidget {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      '${items.length} ವಸ್ತುಗಳು',
+                      s.itemCount(items.length),
                       style: const TextStyle(
                         fontSize: 13,
                         color: Color(0xFF2D6A4F),
@@ -221,6 +360,9 @@ class _GroceryBody extends StatelessWidget {
                 ),
               ),
             ),
+
+            // Smart suggestions row
+            _SmartSuggestionsRow(s: s),
 
             if (items.isEmpty)
               Expanded(
@@ -235,7 +377,7 @@ class _GroceryBody extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'ಪಟ್ಟಿ ಖಾಲಿ ಇದೆ',
+                        s.emptyStateTitle,
                         style: TextStyle(
                           fontSize: 18,
                           color: Colors.grey.shade400,
@@ -244,7 +386,7 @@ class _GroceryBody extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'ಮೈಕ್ ಒತ್ತಿ ಕನ್ನಡದಲ್ಲಿ ಹೇಳಿ\nಅಥವಾ ಪಟ್ಟಿಯಿಂದ ಆರಿಸಿ',
+                        s.emptyStateSubtitle,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
@@ -276,15 +418,15 @@ class _GroceryBody extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
               child: TextButton.icon(
-                onPressed: () => _showAddManualDialog(context, provider),
+                onPressed: () => _showAddManualDialog(context, provider, s),
                 icon: const Icon(
                   Icons.add_circle_outline,
                   size: 18,
                   color: Color(0xFF2D6A4F),
                 ),
-                label: const Text(
-                  'ಹೊಸ ವಸ್ತು ಸೇರಿಸಿ',
-                  style: TextStyle(
+                label: Text(
+                  s.btnAddItem,
+                  style: const TextStyle(
                     color: Color(0xFF2D6A4F),
                     fontWeight: FontWeight.w600,
                   ),
@@ -300,6 +442,7 @@ class _GroceryBody extends StatelessWidget {
   void _showAddManualDialog(
     BuildContext context,
     GroceryListProvider provider,
+    AppStrings s,
   ) {
     final nameCtrl = TextEditingController();
     final qtyCtrl = TextEditingController(text: '1');
@@ -313,9 +456,9 @@ class _GroceryBody extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            title: const Text(
-              'ಹೊಸ ವಸ್ತು',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            title: Text(
+              s.addItemTitle,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -324,7 +467,8 @@ class _GroceryBody extends StatelessWidget {
                   controller: nameCtrl,
                   autofocus: true,
                   decoration: InputDecoration(
-                    labelText: 'ಹೆಸರು',
+                    labelText: s.fieldName,
+                    hintText: s.addItemHint,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -342,7 +486,7 @@ class _GroceryBody extends StatelessWidget {
                           decimal: true,
                         ),
                         decoration: InputDecoration(
-                          labelText: 'ಪ್ರಮಾಣ',
+                          labelText: s.fieldQuantity,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -373,9 +517,9 @@ class _GroceryBody extends StatelessWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text(
-                  'ರದ್ದು',
-                  style: TextStyle(color: Colors.grey),
+                child: Text(
+                  s.btnCancel,
+                  style: const TextStyle(color: Colors.grey),
                 ),
               ),
               FilledButton(
@@ -394,7 +538,7 @@ class _GroceryBody extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('ಸೇರಿಸಿ'),
+                child: Text(s.btnAdd),
               ),
             ],
           ),
@@ -424,12 +568,16 @@ class _VoiceFooter extends StatelessWidget {
   }
 }
 
-void _showSaveListDialog(BuildContext context, GroceryListProvider provider) {
+void _showSaveListDialog(
+  BuildContext context,
+  GroceryListProvider provider,
+  AppStrings s,
+) {
   if (provider.itemCount == 0) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('ಪಟ್ಟಿ ಖಾಲಿ ಇದೆ — ಮೊದಲು ವಸ್ತುಗಳನ್ನು ಸೇರಿಸಿ'),
-        duration: Duration(seconds: 2),
+      SnackBar(
+        content: Text(s.snackListEmpty),
+        duration: const Duration(seconds: 2),
       ),
     );
     return;
@@ -439,15 +587,15 @@ void _showSaveListDialog(BuildContext context, GroceryListProvider provider) {
     context: context,
     builder: (ctx) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text(
-        'ಪಟ್ಟಿ ಉಳಿಸಿ',
-        style: TextStyle(fontWeight: FontWeight.bold),
+      title: Text(
+        s.saveListTitle,
+        style: const TextStyle(fontWeight: FontWeight.bold),
       ),
       content: TextField(
         controller: nameCtrl,
         autofocus: true,
         decoration: InputDecoration(
-          labelText: 'ಪಟ್ಟಿಯ ಹೆಸರು',
+          labelText: s.saveListLabel,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
           fillColor: const Color(0xFFF5F5F0),
@@ -456,7 +604,7 @@ void _showSaveListDialog(BuildContext context, GroceryListProvider provider) {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('ರದ್ದು', style: TextStyle(color: Colors.grey)),
+          child: Text(s.btnCancel, style: const TextStyle(color: Colors.grey)),
         ),
         FilledButton(
           onPressed: () {
@@ -469,7 +617,7 @@ void _showSaveListDialog(BuildContext context, GroceryListProvider provider) {
             Navigator.pop(ctx);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('"$name" ಪಟ್ಟಿ ಉಳಿಸಲಾಗಿದೆ'),
+                content: Text(s.listSaved(name)),
                 duration: const Duration(seconds: 2),
               ),
             );
@@ -480,7 +628,7 @@ void _showSaveListDialog(BuildContext context, GroceryListProvider provider) {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          child: const Text('ಉಳಿಸಿ'),
+          child: Text(s.btnSave),
         ),
       ],
     ),
@@ -498,6 +646,7 @@ void _showSavedListsSheet(BuildContext context) {
         ChangeNotifierProvider.value(
           value: context.read<GroceryListProvider>(),
         ),
+        ChangeNotifierProvider.value(value: context.read<LanguageProvider>()),
       ],
       child: DraggableScrollableSheet(
         initialChildSize: 0.65,
@@ -509,13 +658,14 @@ void _showSavedListsSheet(BuildContext context) {
   );
 }
 
-void _showExportSheet(BuildContext context, GroceryListProvider provider) {
+void _showExportSheet(
+  BuildContext context,
+  GroceryListProvider provider,
+  AppStrings s,
+) {
   if (provider.itemCount == 0) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('ಪಟ್ಟಿ ಖಾಲಿ ಇದೆ — ಮೊದಲು ವಸ್ತುಗಳನ್ನು ಸೇರಿಸಿ'),
-        duration: Duration(seconds: 2),
-      ),
+      SnackBar(content: Text(s.snackListEmpty), duration: Duration(seconds: 2)),
     );
     return;
   }
@@ -545,20 +695,20 @@ void _showExportSheet(BuildContext context, GroceryListProvider provider) {
               ),
             ),
             const SizedBox(height: 18),
-            const Text(
-              'ರಫ್ತು ಮಾಡಿ',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              s.exportTitle,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
             Text(
-              '${provider.itemCount} ವಸ್ತುಗಳ ಪಟ್ಟಿ',
+              s.exportSubtitle(provider.itemCount),
               style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 20),
             _ExportOptionTile(
               icon: Icons.picture_as_pdf_outlined,
-              title: 'PDF ಆಗಿ',
-              subtitle: 'ಪಟ್ಟಿಯನ್ನು PDF ರೂಪದಲ್ಲಿ ಶೇರ್ ಮಾಡಿ',
+              title: s.exportPdfTitle,
+              subtitle: s.exportPdfSubtitle,
               color: Colors.redAccent,
               onTap: () {
                 Navigator.pop(context);
@@ -572,8 +722,8 @@ void _showExportSheet(BuildContext context, GroceryListProvider provider) {
             const SizedBox(height: 12),
             _ExportOptionTile(
               icon: Icons.image_outlined,
-              title: 'ಚಿತ್ರವಾಗಿ',
-              subtitle: 'ಪಿಕ್ಚರ್ (PNG) ರೂಪದಲ್ಲಿ ಶೇರ್ ಮಾಡಿ',
+              title: s.exportImageTitle,
+              subtitle: s.exportImageSubtitle,
               color: const Color(0xFF2D6A4F),
               onTap: () {
                 Navigator.pop(context);
@@ -654,5 +804,92 @@ class _ExportOptionTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Displays a horizontal row of quick-add chips for the user's most frequently
+/// bought items that are not already in the current list.
+class _SmartSuggestionsRow extends StatelessWidget {
+  final AppStrings s;
+
+  const _SmartSuggestionsRow({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<GroceryListProvider>(
+      builder: (context, provider, _) {
+        final suggestions = provider.getSmartSuggestions(6);
+        if (suggestions.isEmpty) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.auto_awesome,
+                    size: 13,
+                    color: Color(0xFF2D6A4F),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    s.smartSuggestions,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF2D6A4F),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: suggestions.map((item) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ActionChip(
+                        avatar: const Icon(
+                          Icons.add,
+                          size: 14,
+                          color: Color(0xFF2D6A4F),
+                        ),
+                        label: Text(
+                          _chipLabel(item),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        onPressed: () {
+                          final qty =
+                              double.tryParse(item['quantity'] ?? '1') ?? 1.0;
+                          final unit = UnitLabel.fromLabel(item['unit']!);
+                          provider.addItem(
+                            GroceryItem(
+                              name: item['name']!,
+                              quantity: qty,
+                              unit: unit,
+                            ),
+                          );
+                        },
+                        backgroundColor: const Color(0xFFD8EDD9),
+                        side: BorderSide.none,
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _chipLabel(Map<String, String> item) {
+    return item['name']!;
   }
 }

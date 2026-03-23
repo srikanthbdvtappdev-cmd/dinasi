@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/grocery_item.dart';
 import '../providers/grocery_provider.dart';
+import '../providers/language_provider.dart';
+import '../providers/app_strings.dart';
 import 'package:provider/provider.dart';
 
 class EditItemDialog extends StatefulWidget {
@@ -38,11 +40,12 @@ class _EditItemDialogState extends State<EditItemDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings.of(context.watch<LanguageProvider>());
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text(
-        'ಪಟ್ಟಿ ಬದಲಾಯಿಸಿ',
-        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+      title: Text(
+        s.editItemTitle,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -50,7 +53,7 @@ class _EditItemDialogState extends State<EditItemDialog> {
           TextField(
             controller: _nameController,
             decoration: InputDecoration(
-              labelText: 'ವಸ್ತುವಿನ ಹೆಸರು',
+              labelText: s.editItemNameLabel,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -71,7 +74,7 @@ class _EditItemDialogState extends State<EditItemDialog> {
                     FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
                   ],
                   decoration: InputDecoration(
-                    labelText: 'ಪ್ರಮಾಣ',
+                    labelText: s.fieldQuantity,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -110,7 +113,7 @@ class _EditItemDialogState extends State<EditItemDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('ರದ್ದು', style: TextStyle(color: Colors.grey)),
+          child: Text(s.btnCancel, style: const TextStyle(color: Colors.grey)),
         ),
         FilledButton(
           onPressed: () {
@@ -129,7 +132,7 @@ class _EditItemDialogState extends State<EditItemDialog> {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          child: const Text('ಉಳಿಸಿ'),
+          child: Text(s.btnSave),
         ),
       ],
     );

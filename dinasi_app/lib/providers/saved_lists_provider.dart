@@ -54,4 +54,25 @@ class SavedListsProvider extends ChangeNotifier {
     await _save();
     notifyListeners();
   }
+
+  /// Parses [jsonString] as a SavedList and inserts it at the top.
+  /// Returns the imported list name on success, or null if parsing fails.
+  Future<String?> importFromJsonString(String jsonString) async {
+    try {
+      final decoded = jsonDecode(jsonString) as Map<String, dynamic>;
+      final original = SavedList.fromJson(decoded);
+      final imported = SavedList(
+        id: _uuid.v4(), // fresh id to avoid collision
+        name: original.name,
+        savedAt: DateTime.now(),
+        items: original.items,
+      );
+      _lists.insert(0, imported);
+      await _save();
+      notifyListeners();
+      return imported.name;
+    } catch (_) {
+      return null;
+    }
+  }
 }

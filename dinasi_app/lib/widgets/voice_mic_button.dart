@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import '../providers/grocery_provider.dart';
+import '../providers/language_provider.dart';
+import '../providers/app_strings.dart';
 import 'package:provider/provider.dart';
 
 class VoiceMicButton extends StatefulWidget {
@@ -10,13 +12,14 @@ class VoiceMicButton extends StatefulWidget {
   State<VoiceMicButton> createState() => _VoiceMicButtonState();
 }
 
+enum _MicState { ready, listening, unavailable }
+
 class _VoiceMicButtonState extends State<VoiceMicButton>
     with SingleTickerProviderStateMixin {
   final SpeechToText _speech = SpeechToText();
-  bool _isListening = false;
+  _MicState _state = _MicState.ready;
   bool _available = false;
   String _spokenText = '';
-  String _statusText = 'Tap mic to speak';
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -38,45 +41,44 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
     _available = await _speech.initialize(
       onError: (err) {
         setState(() {
-          _isListening = false;
-          _statusText = 'Error: ${err.errorMsg}';
+          _state = _MicState.ready;
           _pulseController.stop();
           _pulseController.reset();
         });
       },
       onStatus: (status) {
         if (status == 'done' || status == 'notListening') {
-          if (_isListening) _stopListening();
+          if (_state == _MicState.listening) _stopListening();
         }
       },
     );
-    setState(() {});
+    if (!_available) setState(() => _state = _MicState.unavailable);
   }
 
   Future<void> _startListening() async {
     if (!_available) {
-      setState(() => _statusText = 'Speech recognition unavailable');
+      setState(() => _state = _MicState.unavailable);
       return;
     }
+    final langProvider = context.read<LanguageProvider>();
+    final localeId = langProvider.isKannada ? 'kn_IN' : 'en_US';
+
     setState(() {
-      _isListening = true;
+      _state = _MicState.listening;
       _spokenText = '';
-      _statusText = 'ಕೇಳುತ್ತಿದ್ದೇನೆ...';
     });
     _pulseController.repeat(reverse: true);
 
     await _speech.listen(
       onResult: (result) {
-        setState(() {
-          _spokenText = result.recognizedWords;
-          _statusText = _spokenText.isNotEmpty
-              ? _spokenText
-              : 'ಕೇಳುತ್ತಿದ್ದೇನೆ...';
-        });
+        setState(() => _spokenText = result.recognizedWords);
+        if (result.finalResult && _spokenText.trim().isNotEmpty) {
+          _stopListening();
+        }
       },
-      localeId: 'kn_IN',
+      localeId: localeId,
       listenOptions: SpeechListenOptions(
-        listenMode: ListenMode.dictation,
+        listenMode: ListenMode.confirmation,
         cancelOnError: false,
         partialResults: true,
       ),
@@ -84,19 +86,23 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
   }
 
   void _stopListening() {
+    if (_state != _MicState.listening) return; // guard against double-call
+    _state = _MicState.ready; // set synchronously before any async callbacks
     _speech.stop();
     _pulseController.stop();
     _pulseController.reset();
 
     final text = _spokenText.trim();
     if (text.isNotEmpty) {
-      context.read<GroceryListProvider>().addItemsFromVoice(text);
+      final lang = context.read<LanguageProvider>().language;
+      context.read<GroceryListProvider>().addItemsFromVoice(
+        text,
+        language: lang,
+      );
     }
 
     setState(() {
-      _isListening = false;
       _spokenText = '';
-      _statusText = 'Tap mic to speak';
     });
   }
 
@@ -109,6 +115,18 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppStrings.of(context.watch<LanguageProvider>());
+    final isListening = _state == _MicState.listening;
+
+    final String displayText;
+    if (_state == _MicState.unavailable) {
+      displayText = strings.micUnavailable;
+    } else if (isListening) {
+      displayText = _spokenText.isNotEmpty ? _spokenText : strings.micListening;
+    } else {
+      displayText = strings.micTapToSpeak;
+    }
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -118,20 +136,20 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           decoration: BoxDecoration(
-            color: _isListening
+            color: isListening
                 ? const Color(0xFF2D6A4F).withValues(alpha: 0.08)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
-            _statusText,
+            displayText,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
-              color: _isListening
+              color: isListening
                   ? const Color(0xFF2D6A4F)
                   : Colors.grey.shade500,
-              fontStyle: _isListening ? FontStyle.normal : FontStyle.italic,
+              fontStyle: isListening ? FontStyle.normal : FontStyle.italic,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -140,14 +158,14 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
 
         // Mic button with pulse effect
         GestureDetector(
-          onTap: _isListening ? _stopListening : _startListening,
+          onTap: isListening ? _stopListening : _startListening,
           child: AnimatedBuilder(
             animation: _pulseAnimation,
             builder: (context, child) {
               return Stack(
                 alignment: Alignment.center,
                 children: [
-                  if (_isListening)
+                  if (isListening)
                     Container(
                       width: 72 * _pulseAnimation.value,
                       height: 72 * _pulseAnimation.value,
@@ -161,7 +179,7 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
                     height: 64,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _isListening
+                      color: isListening
                           ? const Color(0xFF1B4332)
                           : const Color(0xFF2D6A4F),
                       boxShadow: [
@@ -176,7 +194,7 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
                       ],
                     ),
                     child: Icon(
-                      _isListening ? Icons.stop : Icons.mic,
+                      isListening ? Icons.stop : Icons.mic,
                       color: Colors.white,
                       size: 30,
                     ),

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'providers/grocery_provider.dart';
+import 'providers/language_provider.dart';
+import 'providers/notepad_provider.dart';
 import 'providers/predefined_items_provider.dart';
 import 'providers/saved_lists_provider.dart';
 import 'screens/home_screen.dart';
@@ -24,9 +26,11 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
         ChangeNotifierProvider(create: (_) => GroceryListProvider()),
         ChangeNotifierProvider(create: (_) => PredefinedItemsProvider()),
         ChangeNotifierProvider(create: (_) => SavedListsProvider()),
+        ChangeNotifierProvider(create: (_) => NotepadProvider()),
       ],
       child: const DinasiApp(),
     ),

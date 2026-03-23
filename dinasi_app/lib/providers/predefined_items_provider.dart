@@ -147,6 +147,241 @@ class PredefinedItemsProvider extends ChangeNotifier {
     {'kannada': 'ಚಹಾ', 'english': 'Chaha (Tea)', 'unit': 'g'},
   ];
 
+  // Medicines (always displayed in English)
+  static const List<Map<String, String>> _medicineBuiltIn = [
+    // Pain Relief
+    {
+      'kannada': 'Paracetamol',
+      'english': 'Paracetamol – Crocin / Dolo 650',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Ibuprofen',
+      'english': 'Ibuprofen – Brufen / Combiflam',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Aspirin',
+      'english': 'Aspirin – Ecosprin (75/150mg)',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Diclofenac',
+      'english': 'Diclofenac – Voveran / Diclomol',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    // Diabetes
+    {
+      'kannada': 'Metformin',
+      'english': 'Metformin – Glycomet / Glucophage',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Glimepiride',
+      'english': 'Glimepiride – Amaryl / Glimer',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Glibenclamide',
+      'english': 'Glibenclamide – Daonil',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Sitagliptin',
+      'english': 'Sitagliptin – Januvia',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Insulin',
+      'english': 'Insulin (inject) – Lantus / Mixtard',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    // Blood Pressure
+    {
+      'kannada': 'Amlodipine',
+      'english': 'Amlodipine – Stamlo / Norvasc',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Atenolol',
+      'english': 'Atenolol – Tenormin',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Losartan',
+      'english': 'Losartan – Losar / Cozaar',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Telmisartan',
+      'english': 'Telmisartan – Telma / Telsartan',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Ramipril',
+      'english': 'Ramipril – Cardace / Hopace',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    // Cholesterol
+    {
+      'kannada': 'Atorvastatin',
+      'english': 'Atorvastatin – Atorva / Lipitor',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Rosuvastatin',
+      'english': 'Rosuvastatin – Rozavel / Crestor',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    // Acidity & Stomach
+    {
+      'kannada': 'Omeprazole',
+      'english': 'Omeprazole – Omez / Prilosec',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Pantoprazole',
+      'english': 'Pantoprazole – Pan-D / Pantocid',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Ranitidine',
+      'english': 'Ranitidine – Zinetac / Rantac',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Antacid',
+      'english': 'Antacid – Gelusil / Digene',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'ORS',
+      'english': 'ORS Sachet – Electral / Pedialyte',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    // Allergy, Cold & Cough
+    {
+      'kannada': 'Cetirizine',
+      'english': 'Cetirizine – Cetriz / Zyrtec',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Levocetirizine',
+      'english': 'Levocetirizine – L-Cetriz',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Cough Syrup',
+      'english': 'Cough Syrup – Benadryl / Ascoril',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Nasal Drops',
+      'english': 'Nasal Drops – Nasivion / Otrivin',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    // Antibiotics
+    {
+      'kannada': 'Azithromycin',
+      'english': 'Azithromycin – Azee / Zithromax',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Amoxicillin',
+      'english': 'Amoxicillin – Mox / Amoxil',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Ciprofloxacin',
+      'english': 'Ciprofloxacin – Cifran / Ciplox',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    // Vitamins & Supplements
+    {
+      'kannada': 'Vitamin D3',
+      'english': 'Vitamin D3 – Calcirol / Uprise-D3',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Vitamin C',
+      'english': 'Vitamin C – Celin 500',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'B-Complex',
+      'english': 'Vitamin B-Complex – Becosules',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Calcium D3',
+      'english': 'Calcium + D3 – Shelcal / Calcimax',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Iron Folic',
+      'english': 'Iron + Folic Acid – Dexorange',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    // First Aid
+    {
+      'kannada': 'Betadine',
+      'english': 'Betadine – Antiseptic Solution',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Band Aid',
+      'english': 'Band Aid / Bandage',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'Thermometer',
+      'english': 'Digital Thermometer',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+    {
+      'kannada': 'BP Monitor',
+      'english': 'BP Monitor / Glucometer Strips',
+      'unit': 'pcs',
+      'category': 'Medicines',
+    },
+  ];
+
   // User-added custom items
   final List<Map<String, String>> _customItems = [];
 
@@ -171,7 +406,21 @@ class PredefinedItemsProvider extends ChangeNotifier {
     await prefs.setString(_customKey, jsonEncode(_customItems));
   }
 
-  List<Map<String, String>> get all => [..._builtIn, ..._customItems];
+  List<Map<String, String>> get all => [
+    ..._builtIn,
+    ..._medicineBuiltIn,
+    ..._customItems,
+  ];
+
+  List<Map<String, String>> get groceryItems => [
+    ..._builtIn,
+    ..._customItems.where((i) => (i['category'] ?? '') != 'Medicines'),
+  ];
+
+  List<Map<String, String>> get medicineItems => [
+    ..._medicineBuiltIn,
+    ..._customItems.where((i) => i['category'] == 'Medicines'),
+  ];
 
   List<Map<String, String>> get customItems => List.unmodifiable(_customItems);
 
@@ -184,10 +433,32 @@ class PredefinedItemsProvider extends ChangeNotifier {
     }).toList();
   }
 
+  List<Map<String, String>> searchGroceries(String query) {
+    if (query.isEmpty) return groceryItems;
+    final lower = query.toLowerCase();
+    return groceryItems.where((item) {
+      return item['kannada']!.contains(query) ||
+          item['english']!.toLowerCase().contains(lower);
+    }).toList();
+  }
+
+  List<Map<String, String>> searchMedicines(String query) {
+    if (query.isEmpty) return medicineItems;
+    final lower = query.toLowerCase();
+    return medicineItems.where((item) {
+      return item['english']!.toLowerCase().contains(lower);
+    }).toList();
+  }
+
   bool isCustom(Map<String, String> item) => _customItems.contains(item);
 
-  /// Add a new custom item. Returns false if a duplicate kannada name exists.
-  bool addCustomItem(String kannada, String english, String unit) {
+  /// Add a new custom item. Returns false if a duplicate name exists.
+  bool addCustomItem(
+    String kannada,
+    String english,
+    String unit, {
+    String category = 'Groceries',
+  }) {
     final trimmed = kannada.trim();
     if (trimmed.isEmpty) return false;
     final duplicate = all.any((i) => i['kannada']!.trim() == trimmed);
@@ -196,6 +467,7 @@ class PredefinedItemsProvider extends ChangeNotifier {
       'kannada': trimmed,
       'english': english.trim().isEmpty ? trimmed : english.trim(),
       'unit': unit,
+      if (category != 'Groceries') 'category': category,
     });
     _save();
     notifyListeners();
@@ -206,6 +478,29 @@ class PredefinedItemsProvider extends ChangeNotifier {
     _customItems.remove(item);
     _save();
     notifyListeners();
+  }
+
+  /// Appends items from JSON import, skipping duplicates. Returns count of added items.
+  int importItems(List<Map<String, String>> items) {
+    int added = 0;
+    for (final item in items) {
+      final kannada = item['kannada']?.trim() ?? '';
+      if (kannada.isEmpty) continue;
+      final duplicate = all.any((i) => i['kannada']!.trim() == kannada);
+      if (duplicate) continue;
+      _customItems.add({
+        'kannada': kannada,
+        'english': item['english'] ?? kannada,
+        'unit': item['unit'] ?? 'pcs',
+        if ((item['category'] ?? '') == 'Medicines') 'category': 'Medicines',
+      });
+      added++;
+    }
+    if (added > 0) {
+      _save();
+      notifyListeners();
+    }
+    return added;
   }
 
   // For use in KannadaVoiceParser / GroceryListProvider
