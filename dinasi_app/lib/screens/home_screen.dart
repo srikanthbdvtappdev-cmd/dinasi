@@ -24,12 +24,16 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
   final _notepadCtrl = NotepadController();
+  bool _drawMode = false;
 
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 2, vsync: this);
     _tab.addListener(() => setState(() {}));
+    _notepadCtrl.onModeChanged = (isDrawMode) {
+      if (mounted) setState(() => _drawMode = isDrawMode);
+    };
   }
 
   @override
@@ -51,10 +55,14 @@ class _HomeScreenState extends State<HomeScreen>
               tabController: _tab,
               currentTab: _tab.index,
               notepadCtrl: _notepadCtrl,
+              isDrawMode: _drawMode,
             ),
             Expanded(
               child: TabBarView(
                 controller: _tab,
+                physics: _drawMode
+                    ? const NeverScrollableScrollPhysics()
+                    : const ScrollPhysics(),
                 children: [
                   Column(
                     children: [
@@ -73,19 +81,29 @@ class _HomeScreenState extends State<HomeScreen>
   }
 }
 
-class _Header extends StatelessWidget {
+class _Header extends StatefulWidget {
   final TabController tabController;
   final int currentTab;
   final NotepadController? notepadCtrl;
+  final bool isDrawMode;
 
   const _Header({
     required this.tabController,
     required this.currentTab,
     this.notepadCtrl,
+    this.isDrawMode = false,
   });
 
   @override
+  State<_Header> createState() => _HeaderState();
+}
+
+class _HeaderState extends State<_Header> {
+  @override
   Widget build(BuildContext context) {
+    final notepadCtrl = widget.notepadCtrl;
+    final currentTab = widget.currentTab;
+    final _isDrawMode = widget.isDrawMode;
     return Consumer2<GroceryListProvider, LanguageProvider>(
       builder: (context, provider, langProvider, _) {
         final s = AppStrings.of(langProvider);
@@ -146,28 +164,43 @@ class _Header extends StatelessWidget {
                     ),
                     // Notepad actions — visible only on the notepad tab
                     if (currentTab == 1) ...[
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        onPressed: () => notepadCtrl?.showSavedNotes?.call(),
-                        icon: const Icon(
-                          Icons.notes,
-                          color: Colors.white,
-                          size: 22,
+                      if (!_isDrawMode) ...[
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          onPressed: () => notepadCtrl?.showSavedNotes?.call(),
+                          icon: const Icon(
+                            Icons.notes,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                          tooltip: s.notepadSavedNotesTooltip,
                         ),
-                        tooltip: s.notepadSavedNotesTooltip,
-                      ),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        onPressed: () => notepadCtrl?.save?.call(),
-                        icon: const Icon(
-                          Icons.save_outlined,
-                          color: Colors.white,
-                          size: 22,
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          onPressed: () => notepadCtrl?.save?.call(),
+                          icon: const Icon(
+                            Icons.save_outlined,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                          tooltip: s.notepadSaveTooltip,
                         ),
-                        tooltip: s.notepadSaveTooltip,
-                      ),
+                      ],
+                      if (_isDrawMode) ...[
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          onPressed: () => notepadCtrl?.undoStroke?.call(),
+                          icon: const Icon(
+                            Icons.undo,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                          tooltip: s.notepadUndoStroke,
+                        ),
+                      ],
                       IconButton(
                         visualDensity: VisualDensity.compact,
                         padding: EdgeInsets.zero,
@@ -177,7 +210,9 @@ class _Header extends StatelessWidget {
                           color: Color(0xFFFF8A80),
                           size: 22,
                         ),
-                        tooltip: s.notepadClearTooltip,
+                        tooltip: _isDrawMode
+                            ? s.notepadClearDrawing
+                            : s.notepadClearTooltip,
                       ),
                     ],
                     // Grocery actions — visible only on the grocery tab
@@ -293,7 +328,7 @@ class _Header extends StatelessWidget {
               ),
               // Tab bar
               TabBar(
-                controller: tabController,
+                controller: widget.tabController,
                 labelColor: Colors.white,
                 unselectedLabelColor: Colors.white54,
                 indicatorColor: const Color(0xFFFF8A80),

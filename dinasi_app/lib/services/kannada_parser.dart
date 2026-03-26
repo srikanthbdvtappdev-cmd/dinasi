@@ -29,7 +29,7 @@ class KannadaVoiceParser {
     'ಎಂಭತ್': 80, 'ಎಂಬತ್ತು': 80, 'ಎಂಬತ್': 80, // ಎಂಭತ್ತು variants
     'ತೊಂಬತ್': 90, // ತೊಂಬತ್ತು → ತೊಂಬತ್
     'ನೂರ್': 100,
-
+    'ನೂರ': 100, // STT drops the final ು
     // ── Teen alternate spellings ──────────────────────────────────────────
     'ಹದ್ನೊಂದು': 11, 'ಹದ್ನೆರಡು': 12,
     'ಹದ್ನೈದು': 15, 'ಹದ್ನಾರು': 16,
@@ -46,17 +46,38 @@ class KannadaVoiceParser {
     '೬': 6, '೭': 7, '೮': 8, '೯': 9, '೧೦': 10,
     '೨೦': 20, '೩೦': 30, '೪೦': 40, '೫೦': 50,
     '೬೦': 60, '೭೦': 70, '೮೦': 80, '೯೦': 90, '೧೦೦': 100,
+
+    // ── Transliterated (Latin) forms — STT sometimes returns these ────────
+    'ondu': 1, 'ond': 1,
+    'eradu': 2, 'erdu': 2, 'iradu': 2,
+    'mooru': 3, 'muru': 3,
+    'nalku': 4, 'naaku': 4, 'naalu': 4, 'naalku': 4,
+    'aidhu': 5, 'aidu': 5, 'aydu': 5, 'idu': 5,
+    'aaru': 6, 'aru': 6,
+    'ezhu': 7, 'yelu': 7, 'ezlu': 7, 'elu': 7,
+    'entu': 8, 'ettu': 8,
+    'ombattu': 9, 'ombotto': 9, 'ombuttu': 9,
+    'hattu': 10, 'hatu': 10, 'pattu': 10,
+    'nuru': 100, 'nooru': 100,
+    'ardha': 0.5, 'artha': 0.5,
+    'kaalu': 0.25, 'kaal': 0.25,
   };
 
   /// Unit keywords in Kannada
   static const Map<String, Unit> _unitKeywords = {
+    // ── Kannada script ────────────────────────────────────────────────────
     'ಕೆ.ಜಿ': Unit.kg,
     'ಕೇಜಿ': Unit.kg,
+    'ಕೆಜಿ': Unit.kg, // short-e variant — STT commonly returns this
+    'ಕಿ.ಗ್ರಾ': Unit.kg,
     'ಕಿಲೋ': Unit.kg,
     'ಗ್ರಾಂ': Unit.g,
     'ಗ್ರಾಮ್': Unit.g,
+    'ಗ್ರಾಮ': Unit.g, // STT drops the final ್ virama
+    'ಗ್ರಾ': Unit.g, // abbreviated form
     'ಲೀಟರ್': Unit.L,
     'ಲೀಟರ': Unit.L,
+    'ಲೀಟ': Unit.L, // abbreviated STT form
     'ಮಿಲಿ': Unit.mL,
     'ಮಿ.ಲಿ': Unit.mL,
     'ಮಿಲಿಲೀಟರ್': Unit.mL,
@@ -69,6 +90,39 @@ class KannadaVoiceParser {
     'ಗುಚ್ಛ': Unit.bunch,
     'ಪ್ಯಾಕ್': Unit.pack,
     'ಪ್ಯಾಕೇಟ್': Unit.pack,
+    // ── Latin script — STT commonly returns metric units in Latin ─────────
+    'kilograms': Unit.kg,
+    'kilogram': Unit.kg,
+    'kilos': Unit.kg,
+    'kilo': Unit.kg,
+    'kgs': Unit.kg,
+    'kg': Unit.kg,
+    'grams': Unit.g,
+    'gram': Unit.g,
+    'gms': Unit.g,
+    'gm': Unit.g,
+    'litres': Unit.L,
+    'liters': Unit.L,
+    'litre': Unit.L,
+    'liter': Unit.L,
+    'milliliters': Unit.mL,
+    'millilitres': Unit.mL,
+    'milliliter': Unit.mL,
+    'millilitre': Unit.mL,
+    'ml': Unit.mL,
+    'pieces': Unit.pcs,
+    'piece': Unit.pcs,
+    'pcs': Unit.pcs,
+    'pc': Unit.pcs,
+    'nos': Unit.pcs,
+    'dozens': Unit.dozen,
+    'dozen': Unit.dozen,
+    'bunches': Unit.bunch,
+    'bunch': Unit.bunch,
+    'packets': Unit.pack,
+    'packet': Unit.pack,
+    'packs': Unit.pack,
+    'pack': Unit.pack,
   };
 
   /// Known grocery items (Kannada name → default unit)
@@ -190,9 +244,19 @@ class KannadaVoiceParser {
       ..sort((a, b) => b.length.compareTo(a.length));
 
     for (final word in sortedKeys) {
-      if (text.contains(word)) {
-        final remaining = text.replaceFirst(word, '').trim();
-        return (_kannadaNumbers[word]!, remaining);
+      if (word.codeUnitAt(0) < 128) {
+        // Latin transliteration — case-insensitive regex (handles "Ondu", "ONDU")
+        final pattern = RegExp(RegExp.escape(word), caseSensitive: false);
+        if (pattern.hasMatch(text)) {
+          final remaining = text.replaceFirst(pattern, '').trim();
+          return (_kannadaNumbers[word]!, remaining);
+        }
+      } else {
+        // Kannada/Unicode script — plain contains (case folding breaks Unicode)
+        if (text.contains(word)) {
+          final remaining = text.replaceFirst(word, '').trim();
+          return (_kannadaNumbers[word]!, remaining);
+        }
       }
     }
 
@@ -215,9 +279,19 @@ class KannadaVoiceParser {
       ..sort((a, b) => b.length.compareTo(a.length));
 
     for (final keyword in sortedKeys) {
-      if (text.contains(keyword)) {
-        final remaining = text.replaceFirst(keyword, '').trim();
-        return (_unitKeywords[keyword]!, remaining);
+      if (keyword.codeUnitAt(0) < 128) {
+        // Latin unit — case-insensitive regex (handles "Kg", "KG", "ML")
+        final pattern = RegExp(RegExp.escape(keyword), caseSensitive: false);
+        if (pattern.hasMatch(text)) {
+          final remaining = text.replaceFirst(pattern, '').trim();
+          return (_unitKeywords[keyword]!, remaining);
+        }
+      } else {
+        // Kannada/Unicode script — plain contains
+        if (text.contains(keyword)) {
+          final remaining = text.replaceFirst(keyword, '').trim();
+          return (_unitKeywords[keyword]!, remaining);
+        }
       }
     }
     return null;

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import '../providers/grocery_provider.dart';
@@ -20,6 +21,11 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
   _MicState _state = _MicState.ready;
   bool _available = false;
   String _spokenText = '';
+  Timer? _silenceTimer;
+
+  // 5s timeout if no speech starts; 3s timeout after speech pauses
+  static const _initialSilence = Duration(seconds: 5);
+  static const _postSpeechPause = Duration(seconds: 3);
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -39,20 +45,25 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
 
   Future<void> _initSpeech() async {
     _available = await _speech.initialize(
-      onError: (err) {
-        setState(() {
-          _state = _MicState.ready;
-          _pulseController.stop();
-          _pulseController.reset();
-        });
-      },
-      onStatus: (status) {
-        if (status == 'done' || status == 'notListening') {
-          if (_state == _MicState.listening) _stopListening();
+      onError: (_) {
+        _silenceTimer?.cancel();
+        if (_state == _MicState.listening) {
+          setState(() {
+            _state = _MicState.ready;
+            _pulseController.stop();
+            _pulseController.reset();
+          });
         }
       },
     );
     if (!_available) setState(() => _state = _MicState.unavailable);
+  }
+
+  void _resetSilenceTimer({bool hasSpeech = false}) {
+    _silenceTimer?.cancel();
+    _silenceTimer = Timer(hasSpeech ? _postSpeechPause : _initialSilence, () {
+      if (_state == _MicState.listening) _stopListening();
+    });
   }
 
   Future<void> _startListening() async {
@@ -60,25 +71,38 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
       setState(() => _state = _MicState.unavailable);
       return;
     }
-    final langProvider = context.read<LanguageProvider>();
-    final localeId = langProvider.isKannada ? 'kn_IN' : 'en_US';
-
     setState(() {
       _state = _MicState.listening;
       _spokenText = '';
     });
     _pulseController.repeat(reverse: true);
 
+    final localeId = context.read<LanguageProvider>().isKannada
+        ? 'kn_IN'
+        : 'en_US';
+
+    // Start 5-second initial silence timer
+    _resetSilenceTimer(hasSpeech: false);
+
     await _speech.listen(
       onResult: (result) {
-        setState(() => _spokenText = result.recognizedWords);
-        if (result.finalResult && _spokenText.trim().isNotEmpty) {
+        final words = result.recognizedWords.trim();
+        setState(() => _spokenText = words);
+
+        if (words.isNotEmpty) {
+          // Speech detected — reset to 3-second post-speech timer
+          _resetSilenceTimer(hasSpeech: true);
+        }
+
+        if (result.finalResult && words.isNotEmpty) {
+          _silenceTimer?.cancel();
           _stopListening();
         }
       },
       localeId: localeId,
+      listenFor: const Duration(seconds: 60),
       listenOptions: SpeechListenOptions(
-        listenMode: ListenMode.confirmation,
+        listenMode: ListenMode.dictation,
         cancelOnError: false,
         partialResults: true,
       ),
@@ -86,8 +110,9 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
   }
 
   void _stopListening() {
-    if (_state != _MicState.listening) return; // guard against double-call
-    _state = _MicState.ready; // set synchronously before any async callbacks
+    if (_state != _MicState.listening) return;
+    _silenceTimer?.cancel();
+    _state = _MicState.ready;
     _speech.stop();
     _pulseController.stop();
     _pulseController.reset();
@@ -99,15 +124,19 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
         text,
         language: lang,
       );
+      setState(() {
+        _spokenText = '';
+      });
+    } else {
+      setState(() {
+        _spokenText = '';
+      });
     }
-
-    setState(() {
-      _spokenText = '';
-    });
   }
 
   @override
   void dispose() {
+    _silenceTimer?.cancel();
     _pulseController.dispose();
     _speech.cancel();
     super.dispose();
@@ -145,13 +174,13 @@ class _VoiceMicButtonState extends State<VoiceMicButton>
             displayText,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: isListening
                   ? const Color(0xFF2D6A4F)
                   : Colors.grey.shade500,
               fontStyle: isListening ? FontStyle.normal : FontStyle.italic,
             ),
-            maxLines: 2,
+            maxLines: 4,
             overflow: TextOverflow.ellipsis,
           ),
         ),

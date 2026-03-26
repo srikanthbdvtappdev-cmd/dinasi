@@ -6,10 +6,19 @@ import '../models/note.dart';
 
 class NotepadProvider extends ChangeNotifier {
   static const _key = 'saved_notes';
+  static const _draftTextKey = 'notepad_draft_text';
+  static const _draftStrokesKey = 'notepad_draft_strokes';
   static const _uuid = Uuid();
 
   final List<Note> _notes = [];
   List<Note> get notes => List.unmodifiable(_notes);
+
+  String _draftText = '';
+  String get draftText => _draftText;
+
+  List<Map<String, dynamic>> _draftStrokes = [];
+  List<Map<String, dynamic>> get draftStrokes =>
+      List.unmodifiable(_draftStrokes);
 
   NotepadProvider() {
     _load();
@@ -23,8 +32,16 @@ class NotepadProvider extends ChangeNotifier {
       _notes.addAll(
         decoded.map((e) => Note.fromJson(e as Map<String, dynamic>)),
       );
-      notifyListeners();
     }
+    _draftText = prefs.getString(_draftTextKey) ?? '';
+    final rawStrokes = prefs.getString(_draftStrokesKey);
+    if (rawStrokes != null) {
+      final List decoded = jsonDecode(rawStrokes) as List;
+      _draftStrokes = decoded
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    }
+    notifyListeners();
   }
 
   Future<void> _persist() async {
@@ -33,6 +50,18 @@ class NotepadProvider extends ChangeNotifier {
       _key,
       jsonEncode(_notes.map((e) => e.toJson()).toList()),
     );
+  }
+
+  Future<void> saveDraftText(String text) async {
+    _draftText = text;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_draftTextKey, text);
+  }
+
+  Future<void> saveDraftStrokes(List<Map<String, dynamic>> strokes) async {
+    _draftStrokes = strokes;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_draftStrokesKey, jsonEncode(strokes));
   }
 
   Future<void> saveNote(String title, String content) async {

@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
+
 import '../providers/language_provider.dart';
 import '../providers/notepad_provider.dart';
 import '../providers/app_strings.dart';
@@ -12,6 +14,10 @@ class NotepadController {
   VoidCallback? save;
   VoidCallback? delete;
   VoidCallback? showSavedNotes;
+  VoidCallback? clearDrawing;
+  VoidCallback? undoStroke;
+  // Called on mode changes; carries the new isDrawMode value.
+  void Function(bool isDrawMode)? onModeChanged;
 }
 
 class NotepadTabContent extends StatefulWidget {
@@ -35,6 +41,42 @@ class _NotepadTabContentState extends State<NotepadTabContent>
   String _interimText = '';
   String _textBeforeListening = '';
   String _listenLocaleId = 'en_US';
+  Timer? _silenceTimer;
+  Timer? _restartTimer;
+  bool _pendingRestart = false;
+
+  // ── Draw mode ─────────────────────────────────────────────────────────────
+  bool _isDrawMode = false;
+  Color _penColor = Colors.black;
+  double _penWidth = 3.0;
+  bool _isEraser = false;
+  final List<_Stroke> _strokes = [];
+  _Stroke? _currentStroke;
+
+  static const _palette = [
+    Colors.black,
+    Color(0xFF2D6A4F), // green
+    Colors.blue,
+    Colors.red,
+    Colors.orange,
+    Colors.purple,
+    Colors.brown,
+  ];
+
+  void _updatePen({Color? color, double? width, bool? eraser}) {
+    setState(() {
+      if (color != null) _penColor = color;
+      if (width != null) _penWidth = width;
+      if (eraser != null) _isEraser = eraser;
+    });
+  }
+
+  void _undoStroke() {
+    setState(() {
+      if (_strokes.isNotEmpty) _strokes.removeLast();
+    });
+    _saveDraftStrokes();
+  }
 
   late final AnimationController _pulseCtrl;
   late final Animation<double> _pulseAnim;
@@ -42,10 +84,14 @@ class _NotepadTabContentState extends State<NotepadTabContent>
   @override
   void initState() {
     super.initState();
-    // Register callbacks so the parent header can trigger save/delete.
+    // Register callbacks so the parent header can trigger save/delete/draw.
     widget.controller?.save = _showSaveDialog;
-    widget.controller?.delete = _showClearDialog;
+    widget.controller?.delete = _isDrawMode
+        ? _showClearDrawingDialog
+        : _showClearDialog;
     widget.controller?.showSavedNotes = _showSavedNotes;
+    widget.controller?.clearDrawing = _showClearDrawingDialog;
+    widget.controller?.undoStroke = _undoStroke;
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -57,55 +103,90 @@ class _NotepadTabContentState extends State<NotepadTabContent>
     _focusNode.addListener(() {
       if (mounted) setState(() {});
     });
+    _textCtrl.addListener(_onDraftTextChanged);
+    // Restore persisted draft after first frame so context is available.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadDraft());
     _initSpeech();
   }
 
   Future<void> _initSpeech() async {
     _speechAvailable = await _speech.initialize(
-      onError: (_) => _onSpeechDone(),
-      onStatus: (_) {}, // restart handled in onResult to avoid race condition
+      onError: (e) {
+        _onSpeechDone();
+      },
+      onStatus: (status) {
+        if (!mounted || _micState != _MicState.listening) return;
+        if ((status == 'done' || status == 'notListening') && _pendingRestart) {
+          _pendingRestart = false;
+          _restartTimer?.cancel();
+          _doListen();
+        }
+      },
     );
     if (!_speechAvailable && mounted) {
       setState(() => _micState = _MicState.unavailable);
     }
   }
 
+  void _resetSilenceTimer() {
+    _silenceTimer?.cancel();
+    _silenceTimer = Timer(const Duration(seconds: 30), () {
+      if (_micState == _MicState.listening) _onSpeechDone();
+    });
+  }
+
   void _onSpeechResult(SpeechRecognitionResult result) {
     final spoken = result.recognizedWords;
     if (!mounted) return;
 
-    final sep =
-        _textBeforeListening.isEmpty ||
-            _textBeforeListening.endsWith('\n') ||
-            _textBeforeListening.endsWith(' ')
-        ? ''
-        : ' ';
-    final newText = _textBeforeListening + sep + spoken;
-
-    setState(() {
-      _interimText = spoken;
-      _textCtrl.text = newText;
-      _textCtrl.selection = TextSelection.collapsed(offset: newText.length);
-    });
-
-    // finalResult = true arrives BEFORE onStatus:'done', so it's safe to
-    // commit text here and restart — no race condition.
-    if (result.finalResult && _micState == _MicState.listening) {
-      _textBeforeListening = newText;
-      _interimText = '';
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (!mounted || _micState != _MicState.listening) return;
-        _speech.listen(
-          onResult: _onSpeechResult,
-          localeId: _listenLocaleId,
-          listenOptions: SpeechListenOptions(
-            listenMode: ListenMode.dictation,
-            cancelOnError: false,
-            partialResults: true,
-          ),
-        );
+    if (spoken.isNotEmpty) {
+      _resetSilenceTimer();
+      final sep =
+          _textBeforeListening.isEmpty ||
+              _textBeforeListening.endsWith('\n') ||
+              _textBeforeListening.endsWith(' ')
+          ? ''
+          : ' ';
+      final newText = _textBeforeListening + sep + spoken;
+      setState(() {
+        _interimText = spoken;
+        _textCtrl.text = newText;
+        _textCtrl.selection = TextSelection.collapsed(offset: newText.length);
       });
+      if (result.finalResult && _micState == _MicState.listening) {
+        _textBeforeListening = newText;
+        setState(() => _interimText = '');
+        _scheduleRestart();
+      }
+    } else if (result.finalResult && _micState == _MicState.listening) {
+      _scheduleRestart();
     }
+  }
+
+  void _scheduleRestart() {
+    _pendingRestart = true;
+    // Fallback: if onStatus:'done' never fires (some devices), restart after 600ms
+    _restartTimer?.cancel();
+    _restartTimer = Timer(const Duration(milliseconds: 600), () {
+      if (_pendingRestart && _micState == _MicState.listening) {
+        _pendingRestart = false;
+        _doListen();
+      }
+    });
+  }
+
+  void _doListen() {
+    if (!mounted || _micState != _MicState.listening) return;
+    _speech.listen(
+      onResult: _onSpeechResult,
+      localeId: _listenLocaleId,
+      listenFor: const Duration(minutes: 5),
+      listenOptions: SpeechListenOptions(
+        listenMode: ListenMode.dictation,
+        cancelOnError: false,
+        partialResults: true,
+      ),
+    );
   }
 
   Future<void> _startListening() async {
@@ -116,12 +197,16 @@ class _NotepadTabContentState extends State<NotepadTabContent>
     // Capture existing text; we'll append spoken words after it
     _textBeforeListening = _textCtrl.text;
     _interimText = '';
+    _pendingRestart = false;
+    _restartTimer?.cancel();
     setState(() => _micState = _MicState.listening);
     _pulseCtrl.repeat(reverse: true);
+    _resetSilenceTimer();
 
     await _speech.listen(
       onResult: _onSpeechResult,
       localeId: _listenLocaleId,
+      listenFor: const Duration(minutes: 5),
       listenOptions: SpeechListenOptions(
         listenMode: ListenMode.dictation,
         cancelOnError: false,
@@ -132,8 +217,10 @@ class _NotepadTabContentState extends State<NotepadTabContent>
 
   void _onSpeechDone() {
     if (!mounted || _micState != _MicState.listening) return;
-    _micState =
-        _MicState.ready; // set synchronously to block any delayed restarts
+    _silenceTimer?.cancel();
+    _restartTimer?.cancel();
+    _pendingRestart = false;
+    _micState = _MicState.ready;
     _speech.stop();
     _pulseCtrl.stop();
     _pulseCtrl.reset();
@@ -143,6 +230,15 @@ class _NotepadTabContentState extends State<NotepadTabContent>
   }
 
   void _stopListening() => _onSpeechDone();
+
+  void _insertNewLine() {
+    final newText = _textCtrl.text + '\n';
+    _textCtrl.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+    );
+    _textBeforeListening = newText;
+  }
 
   // ── Save ──────────────────────────────────────────────────────────────────
 
@@ -282,10 +378,110 @@ class _NotepadTabContentState extends State<NotepadTabContent>
     );
   }
 
+  // ── Clear drawing ─────────────────────────────────────────────────────────
+
+  void _showClearDrawingDialog() {
+    if (_strokes.isEmpty) return;
+    final s = AppStrings.of(context.read<LanguageProvider>());
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          s.notepadClearDrawingTitle,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(s.notepadClearDrawingBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(s.btnCancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: () {
+              setState(() {
+                _strokes.clear();
+                _currentStroke = null;
+              });
+              _saveDraftStrokes();
+              Navigator.pop(ctx);
+            },
+            child: Text(s.btnDelete),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Draft persistence ─────────────────────────────────────────────────────
+
+  void _onDraftTextChanged() {
+    if (!mounted) return;
+    context.read<NotepadProvider>().saveDraftText(_textCtrl.text);
+  }
+
+  void _saveDraftStrokes() {
+    if (!mounted) return;
+    final data = _strokes
+        .map(
+          (s) => {
+            'color': s.color.toARGB32(),
+            'width': s.width,
+            'isEraser': s.isEraser,
+            'points': s.points.map((p) => [p.dx, p.dy]).toList(),
+          },
+        )
+        .toList();
+    context.read<NotepadProvider>().saveDraftStrokes(
+      data.cast<Map<String, dynamic>>(),
+    );
+  }
+
+  void _loadDraft() {
+    if (!mounted) return;
+    final provider = context.read<NotepadProvider>();
+    // Restore text
+    if (provider.draftText.isNotEmpty) {
+      _textCtrl.removeListener(_onDraftTextChanged);
+      _textCtrl.text = provider.draftText;
+      _textCtrl.selection = TextSelection.collapsed(
+        offset: provider.draftText.length,
+      );
+      _textCtrl.addListener(_onDraftTextChanged);
+    }
+    // Restore strokes
+    if (provider.draftStrokes.isNotEmpty) {
+      for (final strokeData in provider.draftStrokes) {
+        final stroke = _Stroke(
+          color: Color(strokeData['color'] as int),
+          width: (strokeData['width'] as num).toDouble(),
+          isEraser: strokeData['isEraser'] as bool,
+        );
+        final pointsList = strokeData['points'] as List;
+        for (final p in pointsList) {
+          stroke.points.add(
+            Offset((p[0] as num).toDouble(), (p[1] as num).toDouble()),
+          );
+        }
+        _strokes.add(stroke);
+      }
+      if (mounted) setState(() {});
+    }
+  }
+
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
   void dispose() {
+    _silenceTimer?.cancel();
+    _restartTimer?.cancel();
+    _textCtrl.removeListener(_onDraftTextChanged);
     _textCtrl.dispose();
     _focusNode.dispose();
     _pulseCtrl.dispose();
@@ -294,6 +490,19 @@ class _NotepadTabContentState extends State<NotepadTabContent>
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
+
+  void _switchMode(bool drawMode) {
+    // Stop mic if switching away from text mode
+    if (drawMode && _micState == _MicState.listening) _stopListening();
+    // Dismiss keyboard when switching to draw mode
+    if (drawMode) _focusNode.unfocus();
+    setState(() => _isDrawMode = drawMode);
+    // Keep header delete button wired to the right action
+    widget.controller?.delete = drawMode
+        ? _showClearDrawingDialog
+        : _showClearDialog;
+    widget.controller?.onModeChanged?.call(drawMode);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -305,59 +514,198 @@ class _NotepadTabContentState extends State<NotepadTabContent>
 
     return Column(
       children: [
-        // ── Writing area ──────────────────────────────────────────────
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(
-                      color: _focusNode.hasFocus
-                          ? const Color(0xFF2D6A4F)
-                          : Colors.grey.shade300,
-                      width: _focusNode.hasFocus ? 1.5 : 1.0,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
+        // ── Mode toggle bar ───────────────────────────────────────────
+        Container(
+          color: const Color(0xFFF5F5EE),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+          child: Row(
+            children: [
+              _ModeToggle(
+                isDrawMode: _isDrawMode,
+                textLabel: s.notepadTextMode,
+                drawLabel: s.notepadDrawMode,
+                onChanged: _switchMode,
+              ),
+              const Spacer(),
+              // Draw-mode toolbar
+              if (_isDrawMode) ...[
+                // Undo
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.undo, size: 22),
+                  onPressed: _undoStroke,
+                  tooltip: s.notepadUndoStroke,
+                ),
+                const SizedBox(width: 4),
+                // Eraser toggle
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  icon: Icon(
+                    _isEraser ? Icons.edit : Icons.auto_fix_normal,
+                    size: 22,
+                    color: _isEraser ? Colors.grey : const Color(0xFF2D6A4F),
                   ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(14),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight:
-                            constraints.maxHeight - 28, // subtract 2×14 padding
+                  tooltip: _isEraser ? 'Pen' : 'Eraser',
+                  onPressed: () => _updatePen(eraser: !_isEraser),
+                ),
+                const SizedBox(width: 4),
+                // Stroke width slider
+                SizedBox(
+                  width: 64,
+                  child: Slider(
+                    value: _penWidth,
+                    min: 1.0,
+                    max: 12.0,
+                    divisions: 11,
+                    activeColor: const Color(0xFF2D6A4F),
+                    onChanged: _isEraser ? null : (v) => _updatePen(width: v),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+
+        // Color palette (draw mode only)
+        if (_isDrawMode)
+          Container(
+            color: const Color(0xFFF5F5EE),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Row(
+              children: _palette.map((color) {
+                final isSelected = !_isEraser && _penColor == color;
+                return GestureDetector(
+                  onTap: () => _updatePen(color: color, eraser: false),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isSelected
+                            ? Colors.black87
+                            : Colors.grey.shade300,
+                        width: isSelected ? 2.5 : 1.0,
                       ),
-                      child: TextField(
-                        controller: _textCtrl,
-                        focusNode: _focusNode,
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                        onTapOutside: (_) => _focusNode.unfocus(),
-                        style: const TextStyle(fontSize: 16, height: 1.6),
-                        decoration: InputDecoration(
-                          hintText: s.notepadHint,
-                          hintStyle: TextStyle(
-                            color: Colors.grey.shade400,
-                            fontSize: 15,
-                          ),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: color.withValues(alpha: 0.5),
+                                blurRadius: 4,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+
+        // ── Writing area or drawing canvas ────────────────────────────
+        Expanded(
+          child: _isDrawMode
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      color: Colors.white,
+                      child: GestureDetector(
+                        onPanStart: (details) {
+                          final stroke = _Stroke(
+                            color: _penColor,
+                            width: _isEraser ? 20.0 : _penWidth,
+                            isEraser: _isEraser,
+                          );
+                          stroke.points.add(details.localPosition);
+                          setState(() => _currentStroke = stroke);
+                        },
+                        onPanUpdate: (details) {
+                          setState(() {
+                            _currentStroke?.points.add(details.localPosition);
+                          });
+                        },
+                        onPanEnd: (_) {
+                          setState(() {
+                            if (_currentStroke != null) {
+                              _strokes.add(_currentStroke!);
+                              _currentStroke = null;
+                            }
+                          });
+                          _saveDraftStrokes();
+                        },
+                        child: CustomPaint(
+                          painter: _DrawingPainter(_strokes, _currentStroke),
+                          child: const SizedBox.expand(),
                         ),
                       ),
                     ),
                   ),
-                );
-              },
-            ),
-          ),
+                )
+              : Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(
+                            color: _focusNode.hasFocus
+                                ? const Color(0xFF2D6A4F)
+                                : Colors.grey.shade300,
+                            width: _focusNode.hasFocus ? 1.5 : 1.0,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Scrollbar(
+                          thumbVisibility: true,
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(14),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight:
+                                    constraints.maxHeight -
+                                    28, // subtract 2×14 padding
+                              ),
+                              child: TextField(
+                                controller: _textCtrl,
+                                focusNode: _focusNode,
+                                maxLines: null,
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.newline,
+                                onTapOutside: (_) => _focusNode.unfocus(),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  height: 1.6,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: s.notepadHint,
+                                  hintStyle: TextStyle(
+                                    color: Colors.grey.shade400,
+                                    fontSize: 15,
+                                  ),
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
         ),
 
-        // ── Voice footer — hidden while keyboard is open ──────────────
-        if (keyboardInset == 0)
+        // ── Voice footer — hidden in draw mode or while keyboard is open ──
+        if (!_isDrawMode && keyboardInset == 0)
           Container(
             padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + bottomInset),
             decoration: BoxDecoration(
@@ -453,10 +801,168 @@ class _NotepadTabContentState extends State<NotepadTabContent>
                     },
                   ),
                 ),
+                if (isListening) ...[
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: _insertNewLine,
+                    icon: const Icon(Icons.keyboard_return, size: 18),
+                    label: const Text('New Line'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF2D6A4F),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
+
+        // Push content above keyboard when open
+        SizedBox(height: keyboardInset),
       ],
+    );
+  }
+}
+
+// ── Drawing data ──────────────────────────────────────────────────────────
+
+class _Stroke {
+  _Stroke({required this.color, required this.width, required this.isEraser})
+    : points = [];
+  final List<Offset> points;
+  final Color color;
+  final double width;
+  final bool isEraser;
+}
+
+class _DrawingPainter extends CustomPainter {
+  final List<_Stroke> strokes;
+  final _Stroke? currentStroke;
+
+  _DrawingPainter(this.strokes, this.currentStroke);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final all = [...strokes, if (currentStroke != null) currentStroke!];
+    for (final stroke in all) {
+      if (stroke.points.isEmpty) continue;
+      final paint = Paint()
+        ..color = stroke.isEraser ? Colors.white : stroke.color
+        ..strokeWidth = stroke.width
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke;
+      final path = Path()
+        ..moveTo(stroke.points.first.dx, stroke.points.first.dy);
+      for (int i = 1; i < stroke.points.length; i++) {
+        path.lineTo(stroke.points[i].dx, stroke.points[i].dy);
+      }
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DrawingPainter old) => true;
+}
+
+// ── Mode toggle widget ─────────────────────────────────────────────────────
+
+class _ModeToggle extends StatelessWidget {
+  final bool isDrawMode;
+  final String textLabel;
+  final String drawLabel;
+  final void Function(bool isDrawMode) onChanged;
+
+  const _ModeToggle({
+    required this.isDrawMode,
+    required this.textLabel,
+    required this.drawLabel,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 32,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _Tab(
+            label: textLabel,
+            icon: Icons.text_fields,
+            selected: !isDrawMode,
+            onTap: () => onChanged(false),
+          ),
+          _Tab(
+            label: drawLabel,
+            icon: Icons.brush_outlined,
+            selected: isDrawMode,
+            onTap: () => onChanged(true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Tab extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _Tab({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: selected ? const Color(0xFF2D6A4F) : Colors.grey.shade600,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                color: selected
+                    ? const Color(0xFF2D6A4F)
+                    : Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

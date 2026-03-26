@@ -181,4 +181,12 @@ class AppStrings {
       _kn ? 'ಕೀಬೋರ್ಡ್ ಮುಚ್ಚಿ' : 'Dismiss keyboard';
   String get notepadLoadTooltip => _kn ? 'ಲೋಡ್ ಮಾಡಿ' : 'Load';
   String get notepadDeleteTooltip => _kn ? 'ತೆಗೆದುಹಾಕು' : 'Delete';
+  String get notepadDrawMode => _kn ? 'ಚಿತ್ರಿಸಿ' : 'Draw';
+  String get notepadTextMode => _kn ? 'ಬರೆಯಿರಿ' : 'Text';
+  String get notepadClearDrawing => _kn ? 'ಚಿತ್ರ ಅಳಿಸಿ' : 'Clear drawing';
+  String get notepadClearDrawingTitle =>
+      _kn ? 'ಚಿತ್ರ ಅಳಿಸಬೇಕೇ?' : 'Clear drawing?';
+  String get notepadClearDrawingBody =>
+      _kn ? 'ಎಲ್ಲ ಚಿತ್ರ ತೆಗೆಯಬೇಕೇ?' : 'Remove all strokes from the canvas?';
+  String get notepadUndoStroke => _kn ? 'ರದ್ದು' : 'Undo';
 }
